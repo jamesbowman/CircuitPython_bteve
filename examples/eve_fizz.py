@@ -9,9 +9,10 @@ gd.init()
 
 while True:
     gd.Clear()
+    gd.VertexFormat(0)
     gd.Begin(eve.POINTS)
-    for i in range(100):
+    for i in range(200):
         gd.ColorRGB(rr(256), rr(256), rr(256))
-        gd.PointSize(rr(100))
+        gd.PointSize(rr(gd.w // 6))
         gd.Vertex2f(rr(gd.w), rr(gd.h))
     gd.swap()
