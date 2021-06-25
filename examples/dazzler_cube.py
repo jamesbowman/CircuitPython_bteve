@@ -19,15 +19,15 @@ P = 125
 N = -P
 
 CUBE_vertices = [
-P,P,P,
-N,P,P,
-P,N,P,
-N,N,P,
+    P,P,P,
+    N,P,P,
+    P,N,P,
+    N,N,P,
 
-P,P,N,
-N,P,N,
-P,N,N,
-N,N,N
+    P,P,N,
+    N,P,N,
+    P,N,N,
+    N,N,N
 ]
 
 def N_VERTICES():
@@ -35,32 +35,31 @@ def N_VERTICES():
 
 # each line is a face: count, normal, 4 vertices
 CUBE_faces = [
-  4, 0,0,127,   0, 1, 3, 2,         #0
-  4, 0,0,-127,  6, 7, 5, 4,         #8
+    4, 0,0,127,   0, 1, 3, 2,         #0
+    4, 0,0,-127,  6, 7, 5, 4,         #8
 
-  4, 0,127,0,   4, 5, 1, 0,         #16
-  4, 0,-127,0,  2, 3, 7, 6,         #24
+    4, 0,127,0,   4, 5, 1, 0,         #16
+    4, 0,-127,0,  2, 3, 7, 6,         #24
 
-  4, 127,0,0,   0, 2, 6, 4,         #32
-  4, -127,0,0,  3, 1, 5, 7,         #40
+    4, 127,0,0,   0, 2, 6, 4,         #32
+    4, -127,0,0,  3, 1, 5, 7,         #40
 
-  -1                                #48
+    -1                                #48
 ]
 
 # 3D Projection
 
 model_mat = [
-  1.0, 0.0, 0.0,
-  0.0, 1.0, 0.0,
-  0.0, 0.0, 1.0
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0
 ]
 
 normal_mat = [
-  1.0, 0.0, 0.0,
-  0.0, 1.0, 0.0,
-  0.0, 0.0, 1.0
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0
 ]
-
 
 def mult_matrices(a, b, c):
     result = [0] * 9
@@ -146,27 +145,17 @@ def project(gd):
     pm_e = len(CUBE_vertices)
     dst = 0
 
-    # ORIGINAL LINE from C code:
-    # scale = 64 * gd.h / 280
-
-    # 280 makes the cube tiny on the Dazzler screen, so I changed it to 100
-    # I don't understand this '100' divisor too well; If the number is too small however ( ~50 or so) , weird clipping is seen with the image
-    #   it may be related to the >> 6   ( / 64) in the lines below where the actual projection occurs.  It possibly has to do with
-    #   the size of the screen, though if that's the case, why the original code doesn't make this proportional to gd.w and gd.h in some way is unknown
-
-    scale = 64 * gd.h / 100
+    scale = 30
     while pm < pm_e:
-        x = int((scale * CUBE_vertices[pm])) >> 6
+        x = int((scale * CUBE_vertices[pm]))
         pm += 1
-        y = int((scale * CUBE_vertices[pm])) >> 6
+        y = int((scale * CUBE_vertices[pm]))
         pm += 1
-        z = int((scale * CUBE_vertices[pm])) >> 6
+        z = int((scale * CUBE_vertices[pm]))
         pm += 1
         xx = x * model_mat[0] + y * model_mat[3] + z * model_mat[6]
         yy = x * model_mat[1] + y * model_mat[4] + z * model_mat[7]
-        # ORIGINAL LINE, directly translated from C code: projected[dst] = (  (int((gd.w / 2 + xx)) << 4) , (int((gd.h / 2 + yy)) << 4) )
-        # removed *16 mult (<< 4), as it seems the Dazzler's Vertex2f doesn't deal with subpixels like the other LCD based Gameduinos
-        projected[dst] = ( (int((gd.w / 2 + xx))) ,  (int((gd.h / 2 + yy))) )
+        projected[dst] = ( (((gd.w / 2 + xx))) ,  (((gd.h / 2 + yy))) )
         dst += 1
 
 def transform_normal(nx, ny, nz):
@@ -178,11 +167,11 @@ def transform_normal(nx, ny, nz):
 
 def draw_quad(gd, x1, y1, x2, y2, x3, y3, bx1, by1, bx3, by3):
 
-# Compute the fourth vertex of the parallelogram, (x4,y4)
+    # Compute the fourth vertex of the parallelogram, (x4,y4)
     x4 = x3 + (x1 - x2)
     y4 = y3 + (y1 - y2)
 
-# Apply Scissor to the extents of the quad
+    # Apply Scissor to the extents of the quad
     minx = max(0,    min(min(x1, x2), min(x3, x4)))
     maxx = min(gd.w, max(max(x1, x2), max(x3, x4)))
     miny = max(0,    min(min(y1, y2), min(y3, y4)))
@@ -190,50 +179,20 @@ def draw_quad(gd, x1, y1, x2, y2, x3, y3, bx1, by1, bx3, by3):
     gd.ScissorXY(minx, miny)
     gd.ScissorSize(maxx - minx, maxy - miny)
 
-#  THIS IS FROM THE ORIGINAL CODE...
-#   it *seems* to hack-together the "cmd_bitmap_transform" command via individual cmd writes to the BT8__ chip
-#       (oy vey!)
-## Set the new bitmap transform
-#    # gd.c4(0xffffff21)
-## bitmap transform
-#    # gd.c4(x1 - minx)
-#    # gd.c4(y1 - miny)
-#    # gd.c4(x2 - minx)
-#    # gd.c4(y2 - miny)
-#    # gd.c4(x3 - minx)
-#    # gd.c4(y3 - miny)
-
-#    # gd.c4(bx1)
-#    # gd.c4(by1)
-#    # gd.c4(bx1)
-#    # gd.c4(by3)
-#    # gd.c4(bx3)
-#    # gd.c4(by3)
-#    # gd.c4(0)
-
-#  Let's try to do it more officially, with the actual cmd_bitmap_transform:
-
-    result_address = 0      # this probably isn't right...
-    # the cmd_bitmap_transform just like a lot of other cmd_XXX places its result into a RAM location specified by this result address param.
-    #   (actually, it's more like an offset from the beginning of the "user area" in RAM).  Location 0 is probably not correct but it doesn't seem
-    #   to have any adverse effects in this case.  Perhaps if the code was doing more involved things and using up more RAM, this would have to
-    #   be rethought
-
-    # (int() coercions probably unnecessary)
     gd.cmd_bitmap_transform(
-        int(x1 - minx),
-        int(y1 - miny),
-        int(x2 - minx),
-        int(y2 - miny),
-        int(x3 - minx),
-        int(y3 - miny),
-        int(bx1),
-        int(by1),
-        int(bx1),
-        int(by3),
-        int(bx3),
-        int(by3),
-        result_address)
+        (x1 - minx),
+        (y1 - miny),
+        (x2 - minx),
+        (y2 - miny),
+        (x3 - minx),
+        (y3 - miny),
+        (bx1),
+        (by1),
+        (bx1),
+        (by3),
+        (bx3),
+        (by3),
+        0)  # result slot, ignored
 
 
 # Draw the quad
@@ -266,7 +225,7 @@ def draw_faces(gd, dir, offset_x, offset_y):
         v1 = CUBE_faces[p]
         v2 = CUBE_faces[p + 1]
         v3 = CUBE_faces[p + 2]
-        p += n;
+        p += n
         n = CUBE_faces[p]
 
         x1 = projected[v1][0]
@@ -323,8 +282,8 @@ def cube_main(gd):
     gd.cmd_loadimage(0, 0)
     gd.load(open("/sd/healsky3.jpg", "rb"))
     print("width = {0}, height = {1}".format(gd.w, gd.h))
-    gd.BitmapHandle(0);
-    gd.BitmapSize(eve.NEAREST, eve.BORDER, eve.BORDER, gd.w, gd.h);
+    gd.BitmapHandle(0)
+    gd.BitmapSize(eve.NEAREST, eve.BORDER, eve.BORDER, 0, 0)
 
     g1=gd.controllers()[0]          # Note: this is a ONE TIME variable "snapshot" of all the sticks and buttons
     cx=gd.w//2
@@ -352,6 +311,7 @@ def cube_main(gd):
         if rrx < 0 or rry < 0:
             rot_angle = -0.1
 
+        gd.ClearColorRGB(5, 0, 0)
         gd.Clear()
         norm_rot, magnitude = normalize([rx, ry, rz])
         if magnitude != 0:
