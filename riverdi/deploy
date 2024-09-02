@@ -1,0 +1,28 @@
+set -e
+
+APP=$1
+ROOT=/media/jamesb/CIRCUITPY
+
+cp $1 image/code.py
+cp ../examples.py image/
+
+rm -rf image/lib/bteve
+
+DIST="local"
+
+case $DIST in
+  "public")
+    rsync -av circuitpython-community-bundle-8.x-mpy-20240828/lib/bteve image/lib
+    ;;
+  "local")
+    rsync -av ~/CircuitPython_bteve/bteve image/lib
+    ;;
+  *)
+    echo "Invalid DIST option: $DIST"
+    false
+    ;;
+esac
+
+# --size-only 
+rsync -rv --checksum image/ $ROOT
+sync

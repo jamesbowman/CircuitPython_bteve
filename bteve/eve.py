@@ -1,8 +1,39 @@
+import time
 import struct
 import array
+import sys
 from collections import namedtuple
 
-from .registers import *
+from .registers import (
+    FIFO_MAX,
+    REG_CMDB_SPACE,
+    REG_CMDB_WRITE,
+    REG_CSPREAD,
+    REG_DITHER,
+    REG_FREQUENCY,
+    REG_GPIOX,
+    REG_GPIOX_DIR,
+    REG_HCYCLE,
+    REG_HOFFSET,
+    REG_HSIZE,
+    REG_HSYNC0,
+    REG_HSYNC1,
+    REG_ID,
+    REG_PCLK,
+    REG_PCLK_FREQ,
+    REG_PCLK_POL,
+    REG_SWIZZLE,
+    REG_VCYCLE,
+    REG_VOFFSET,
+    REG_VSIZE,
+    REG_VSYNC0,
+    REG_VSYNC1,
+)
+
+if sys.implementation.name == 'circuitpython':
+    from _eve import _EVE
+else:
+    from ._eve import _EVE
 
 _B0 = b'\x00'
 def align4(s):
@@ -53,7 +84,87 @@ _Inputs = namedtuple(
     "state",
     ))
 
-class EVE:
+class BaseEVE(_EVE):
+
+    # ------- Low-level operations  -------
+
+    def boot(self):
+        self.coldstart()
+
+        t0 = time.monotonic()
+        while self.rd32(REG_ID) != 0x7c:
+            assert (time.monotonic() - t0) < 1.0, "No response - is device attached?"
+
+        self.getspace()
+
+        # print("ID %x  %x %d %d %x" % (
+        #     self.rd32(eve.REG_ID),
+        #     self.rd32(0xc0000),
+        #     self.rd32(eve.REG_HSIZE),
+        #     self.rd32(eve.REG_VSIZE),
+        #     self.rd32(eve.REG_CMDB_SPACE)))
+
+    def coldstart(self):
+        self.host_cmd(0x61, 0x46)   # CLKSEL: 6xPLL, 72 MHz
+        self.host_cmd(0x44)         # CLKEXT: use external crystal
+        self.host_cmd(0x00)         # Wake up
+        self.host_cmd(0x68)         # RST_PULSE, core reset
+
+    def host_cmd(self, a, b = 0, c = 0):
+        self.transfer(bytes([a, b, c]))
+
+    def _addr(self, a):
+        return struct.pack(">I", a)[1:]
+
+    def rd(self, a, n):
+        return self.transfer(self._addr(a), 1 + n)[1:]
+
+    def wr(self, a, v):
+        self.transfer(self._addr(0x800000 | a) + v)
+
+    def rd32(self, a):
+        return struct.unpack("<I", self.rd(a, 4))[0]
+
+    def wr32(self, a, v):
+        self.wr(a, struct.pack("I", v))
+
+    def getspace(self):
+        self.space = self.rd32(REG_CMDB_SPACE)
+        if self.space & 1:
+            raise CoprocessorException
+
+    def reserve(self, n):
+        while self.space < n:
+            self.getspace()
+
+    def is_finished(self):
+        self.getspace()
+        return self.space == FIFO_MAX
+            
+    def write(self, ss):
+        self.reserve(len(ss))
+        self.wr(REG_CMDB_WRITE, ss)
+        self.space -= len(ss)
+        return
+
+
+        # Write ss to the command FIFO
+        for i in range(0, len(ss), 64):
+            s = ss[i:i + 64]
+            self.reserve(len(s))
+            self.wr(REG_CMDB_WRITE, s)
+            self.space -= len(s)
+
+    def finish(self):
+        self.flush()
+        self.reserve(FIFO_MAX)
+
+    def is_idle(self):
+        self.getspace()
+        return self.space == FIFO_MAX
+
+
+    # ------- Writing to the command FIFO -------
 
     def cstring(self, s):
         if type(s) == str:
@@ -321,6 +432,16 @@ class EVE:
     def cmd_nop(self):
         self.cmd0(0x5b)
 
+    #
+    # 817 commands
+    #
+
+    def cmd_calllist(self, *args):
+        self.cmd(0x67, "I", args)
+
+    def cmd_testcard(self, *args):
+        self.cmd0(0x61)
+
     # Some higher-level functions
 
     def get_inputs(self):
@@ -401,6 +522,40 @@ class EVE:
             if not s:
                 return
             self.cc(align4(s))
+
+    def panel_800x480(self):
+        self.register(self)
+        (self.w, self.h) = (800, 480)
+        self.Clear()
+        self.swap()
+        settings = (
+            (REG_FREQUENCY, 72000000),
+            (REG_CSPREAD,   0),
+            (REG_DITHER,    0),
+            (REG_SWIZZLE,   0),
+
+            (REG_HCYCLE,    928),
+            (REG_HOFFSET,   88),
+            (REG_HSIZE,     800),
+            (REG_HSYNC0,    0),
+            (REG_HSYNC1,    48),
+            (REG_PCLK_POL,  1),
+            (REG_VCYCLE,    525),
+            (REG_VOFFSET,   32),
+            (REG_VSIZE,     480),
+            (REG_VSYNC0,    0),
+            (REG_VSYNC1,    3),
+
+            (REG_PCLK_FREQ, 0x451),
+            (REG_PCLK,      1),
+
+            (REG_GPIOX,     0x8000 | 4),
+            (REG_GPIOX_DIR, 0x8000 | 4),
+        )
+        for (r, v) in settings:
+            self.cmd_regwrite(r, v)
+
+        self.finish()
 
 class MoviePlayer:
     def __init__(self, gd, f, mf_base = 0xf0000, mf_size = 0x8000):

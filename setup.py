@@ -48,6 +48,6 @@ setup(
         "Programming Language :: Python :: 3.5",
     ],
     # What does your project relate to?
-    keywords="adafruit circuitpython graphics eve bt815",
+    keywords="adafruit circuitpython graphics eve bt810 bt815 bt817",
     packages=["bteve"],
 )
